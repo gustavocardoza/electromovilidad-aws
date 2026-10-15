@@ -12,8 +12,13 @@ __pycache__/
 # Datos de entrada (muy pesados, ~5 GB; viven en el disco, fuera de git)
 data/
 
-# Modelos generados (se regeneran con src.solve)
+# Resultados y modelos generados por el solver (se regeneran con src.solve).
+# Se conserva outputs/cache/ (grafo OSM y matrices) porque es costoso de
+# reconstruir y lo necesita el modo road.
 outputs/models/
+outputs/figures/
+outputs/route_*.csv
+outputs/metrics_*.json
 
 # Artefactos temporales de verificación / notebooks ejecutados
 outputs/_*
