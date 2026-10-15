@@ -206,6 +206,29 @@ distinto (p. ej. límite de visitas por vehículo o minimizar la ruta más larga
 - **Recarga parcial**: se repone lo necesario para el siguiente tramo + margen,
   nunca por encima del 95% de SOC.
 
+## Traductor web (`src/web_api.py`)
+
+Para consumir el optimizador desde una web, `web_api` traduce entre el JSON del
+backend y el solver, sin tocar el resto del código:
+
+- `instance_from_request(payload)` convierte el JSON de entrada (`base`,
+  `visits`, `chargers`, `fleet_size`) en un `RoutingInstance` + `fleet_size`.
+- `solve_request(payload)` resuelve de punta a punta y devuelve el JSON de
+  respuesta, generando el sobre (`request_id`, `created_at`, `status`,
+  `persistence`) y las rutas en formato `{vehicle_id, stops}`.
+- `response_from_result(...)` traduce un `FleetResult` ya calculado a ese JSON.
+
+Los parámetros no incluidos en el input (batería, SOC, modo de distancia, peso
+de makespan) usan los valores por defecto de `config.Config`. Se asume que las
+coordenadas caen en la zona del grafo OSM cacheado (Ann Arbor, Michigan). Si el
+request es incompatible (p. ej. más vehículos obligatorios que visitas), la
+respuesta sale con `result.status = "no_solution"` y rutas vacías.
+
+```python
+from src import web_api
+resp = web_api.solve_request(payload)   # payload = dict del JSON de entrada
+```
+
 ## Tests
 
 ```bash
