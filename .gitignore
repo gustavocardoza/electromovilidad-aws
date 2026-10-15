@@ -1,0 +1,27 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Datos de entrada (muy pesados, ~5 GB; viven en el disco, fuera de git)
+data/
+
+# Modelos generados (se regeneran con src.solve)
+outputs/models/
+
+# Artefactos temporales de verificación / notebooks ejecutados
+outputs/_*
+outputs/*_check.ipynb
+outputs/*_run*.ipynb
+
+# Artefactos de workflows
+.agents/
+
+# Caché de herramientas externas (raíz)
+/cache/

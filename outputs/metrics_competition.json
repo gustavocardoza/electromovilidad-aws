@@ -1,0 +1,103 @@
+{
+  "instance": "competition",
+  "feasible": true,
+  "fleet_size": 2,
+  "n_vehicles_used": 2,
+  "n_visits_covered": 20,
+  "n_visits_required": 20,
+  "all_visits_covered": true,
+  "total_drive_energy_kwh": 25.266874869636403,
+  "total_recharges": 0,
+  "total_recharge_energy_kwh": 0.0,
+  "total_recharge_time_hours": 0.0,
+  "min_soc_frac": 0.2558502994362616,
+  "battery_capacity_kwh": 32.73858338040136,
+  "min_soc_limit_frac": 0.1,
+  "per_vehicle": [
+    {
+      "instance": "competition",
+      "feasible": true,
+      "n_visits_covered": 1,
+      "n_visits_required": 20,
+      "all_visits_covered": false,
+      "drive_energy_kwh": 0.9044678502297563,
+      "n_recharges": 0,
+      "recharge_energy_kwh": 0.0,
+      "recharge_time_hours": 0.0,
+      "min_soc_kwh": 31.834115530171605,
+      "min_soc_frac": 0.9723730303257042,
+      "battery_capacity_kwh": 32.73858338040136,
+      "min_soc_limit_frac": 0.1,
+      "plan_feasible": true,
+      "reason": "",
+      "n_visits": 1,
+      "drive_km": 2.7376
+    },
+    {
+      "instance": "competition",
+      "feasible": true,
+      "n_visits_covered": 19,
+      "n_visits_required": 20,
+      "all_visits_covered": false,
+      "drive_energy_kwh": 24.362407019406646,
+      "n_recharges": 0,
+      "recharge_energy_kwh": 0.0,
+      "recharge_time_hours": 0.0,
+      "min_soc_kwh": 8.376176360994705,
+      "min_soc_frac": 0.2558502994362616,
+      "battery_capacity_kwh": 32.73858338040136,
+      "min_soc_limit_frac": 0.1,
+      "plan_feasible": true,
+      "reason": "",
+      "n_visits": 19,
+      "drive_km": 73.7386
+    }
+  ],
+  "reason": "",
+  "distance_mode": "road",
+  "total_drive_km": 76.4762,
+  "routes": [
+    {
+      "vehicle": 0,
+      "route": [
+        "BASE",
+        "V13",
+        "BASE"
+      ],
+      "chargers_used": [],
+      "n_visits": 1,
+      "drive_energy_kwh": 0.904468,
+      "drive_km": 2.7376
+    },
+    {
+      "vehicle": 1,
+      "route": [
+        "BASE",
+        "V12",
+        "V3",
+        "V6",
+        "V19",
+        "V7",
+        "V16",
+        "V15",
+        "V14",
+        "V1",
+        "V18",
+        "V8",
+        "V4",
+        "V17",
+        "V11",
+        "V20",
+        "V10",
+        "V2",
+        "V9",
+        "V5",
+        "BASE"
+      ],
+      "chargers_used": [],
+      "n_visits": 19,
+      "drive_energy_kwh": 24.362408,
+      "drive_km": 73.7386
+    }
+  ]
+}
