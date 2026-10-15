@@ -178,12 +178,14 @@ def solve_instance(
                 "n_visits": r.n_visits,
                 "drive_energy_kwh": r.drive_energy_kwh,
                 "drive_km": round(_route_km(r.node_indices, dist), 4),
+                "drive_time_hours": round(r.drive_time_hours, 4),
             }
         )
 
     fleet = aggregate_fleet_metrics(instance, per_vehicle_metrics, per_vehicle_n_visits, cfg)
     for pv, rv in zip(fleet.per_vehicle, routes_out):
         pv["drive_km"] = rv["drive_km"]
+        pv["drive_time_hours"] = rv["drive_time_hours"]
 
     # Exportar CSV de rutas de la flota.
     route_csv = config.OUTPUTS_DIR / f"route_{instance}.csv"
@@ -194,6 +196,13 @@ def solve_instance(
     metrics["total_drive_km"] = round(
         sum(_route_km(r.node_indices, dist) for r in result.routes), 4
     )
+    metrics["makespan_weight"] = cfg.solver.makespan_weight
+    metrics["avg_speed_kmh"] = cfg.solver.avg_speed_kmh
+    # Makespan de conducción: tiempo del vehículo que más tarda (h) y balance.
+    metrics["makespan_drive_hours"] = round(result.makespan_drive_hours, 4)
+    drive_times = [r.drive_time_hours for r in result.routes]
+    metrics["total_drive_time_hours"] = round(sum(drive_times), 4)
+    metrics["min_drive_time_hours"] = round(min(drive_times), 4) if drive_times else 0.0
     metrics["routes"] = routes_out
     _write_metrics(config.OUTPUTS_DIR / f"metrics_{instance}.json", metrics)
 
@@ -223,13 +232,18 @@ def _print_summary(metrics: dict) -> None:
     print(f"  Energía repuesta:        {metrics['total_recharge_energy_kwh']:.2f} kWh")
     print(f"  Tiempo de recarga:       {metrics['total_recharge_time_hours'] * 60:.1f} min")
     print(f"  Capacidad batería:       {metrics['battery_capacity_kwh']:.1f} kWh")
+    if metrics.get("fleet_size", 1) > 1:
+        print(f"  Equilibrio (makespan_weight={metrics.get('makespan_weight', 0)}):")
+        print(f"    Makespan conducción:   {metrics.get('makespan_drive_hours', 0) * 60:.1f} min "
+              f"(el que más tarda; min {metrics.get('min_drive_time_hours', 0) * 60:.1f} min)")
     print("  Por vehículo:")
     for rv in metrics.get("routes", []):
         chg = f", cargadores: {rv['chargers_used']}" if rv["chargers_used"] else ""
         km = f", {rv['drive_km']:.2f} km" if rv.get("drive_km") is not None else ""
+        t = f", {rv['drive_time_hours'] * 60:.0f} min" if rv.get("drive_time_hours") is not None else ""
         print(
             f"    - V{rv['vehicle']}: {rv['n_visits']} visitas, "
-            f"{rv['drive_energy_kwh']:.2f} kWh{km}{chg}"
+            f"{rv['drive_energy_kwh']:.2f} kWh{km}{t}{chg}"
         )
     print("=" * 60)
 
@@ -244,6 +258,11 @@ def _main() -> None:
     )
     parser.add_argument("--time-limit", type=int, default=None, help="Límite de tiempo (s).")
     parser.add_argument("--vehicles", type=int, default=None, help="Número de vehículos de la flota.")
+    parser.add_argument(
+        "--makespan-weight", type=float, default=None,
+        help="Peso del equilibrio de carga (makespan). 0 = solo energía; "
+             ">0 equilibra el tiempo del vehículo que más tarda. Típico 0.5-5.",
+    )
     parser.add_argument("--battery", type=float, default=None, help="Capacidad batería (kWh).")
     parser.add_argument("--min-soc", type=float, default=None, help="SOC mínimo (fracción 0-1).")
     parser.add_argument("--no-recharge", action="store_true", help="Resolver sin cargadores.")
@@ -263,6 +282,8 @@ def _main() -> None:
         cfg.solver.time_limit_s = args.time_limit
     if args.vehicles is not None:
         cfg.solver.fleet_size = args.vehicles
+    if args.makespan_weight is not None:
+        cfg.solver.makespan_weight = args.makespan_weight
     user_set_battery = args.battery is not None
     if user_set_battery:
         cfg.vehicle.battery_capacity_kwh = args.battery

@@ -113,6 +113,21 @@ class SolverConfig:
     first_solution_strategy: str = "PATH_CHEAPEST_ARC"
     local_search_metaheuristic: str = "GUIDED_LOCAL_SEARCH"
     seed: int = 42
+    # --- Equilibrio de carga de la flota (makespan) ------------------------
+    # Peso del makespan: penaliza el TIEMPO DE CONDUCCIÓN del vehículo que más
+    # tarda (el "span" global de la dimensión de tiempo). Con makespan_weight=0
+    # el objetivo es solo energía total (un vehículo tiende a hacer casi todas
+    # las visitas). Al subirlo, el solver equilibra las rutas para que ningún
+    # vehículo quede sobrecargado, a costa de algo más de energía total. Es un
+    # peso relativo adimensional; valores típicos 0.0-5.0. Por defecto 0.5:
+    # equilibra bien la carga entre vehículos con un costo mínimo de energía
+    # extra (ver branch equilibrio-conductores). makespan_weight=0 recupera el
+    # objetivo de solo energía (reparto desigual).
+    makespan_weight: float = 0.5
+    # Velocidad media de conducción (km/h) para convertir distancia -> tiempo.
+    # Primera aproximación homogénea; se puede refinar con velocidades por tipo
+    # de calle derivadas de la telemetría eVED.
+    avg_speed_kmh: float = 40.0
 
 
 @dataclass

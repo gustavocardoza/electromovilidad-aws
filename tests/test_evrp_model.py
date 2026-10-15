@@ -114,6 +114,7 @@ def test_fleet_three_vehicles_all_used():
     inst = data_loading.load_instance("evaluation")
     model = _model(cap_kwh=60.0)
     cfg = _fast_cfg(cap_kwh=60.0, fleet=3)
+    cfg.solver.makespan_weight = 0.0  # sin equilibrio: solo comprobar cobertura
     cfg.solver.time_limit_s = 15
     res = evrp_model.solve_evrp(inst, model, cfg, use_rechargers=True)
     assert res.feasible, f"status={res.status}"
@@ -121,6 +122,38 @@ def test_fleet_three_vehicles_all_used():
     assert all(r.n_visits >= 1 for r in res.routes)
     visited = _all_visited(res, inst)
     assert len(visited) == 20
+
+
+# --- Equilibrio de carga por makespan --------------------------------------
+
+def test_makespan_balances_fleet():
+    """Con makespan_weight > 0 el reparto de visitas y el tiempo de conducción
+    quedan mucho más equilibrados que con peso 0 (que concentra en un vehículo),
+    sin perder cobertura ni factibilidad del SOC."""
+    inst = data_loading.load_instance("evaluation")
+    model = _model(cap_kwh=60.0)
+
+    cfg0 = _fast_cfg(cap_kwh=60.0, fleet=2)
+    cfg0.solver.makespan_weight = 0.0
+    cfg0.solver.time_limit_s = 15
+    res0 = evrp_model.solve_evrp(inst, model, cfg0, use_rechargers=True)
+
+    cfgb = _fast_cfg(cap_kwh=60.0, fleet=2)
+    cfgb.solver.makespan_weight = 1.0
+    cfgb.solver.time_limit_s = 15
+    resb = evrp_model.solve_evrp(inst, model, cfgb, use_rechargers=True)
+
+    assert res0.feasible and resb.feasible
+    # Diferencia de visitas entre los dos vehículos.
+    gap0 = abs(res0.routes[0].n_visits - res0.routes[1].n_visits)
+    gapb = abs(resb.routes[0].n_visits - resb.routes[1].n_visits)
+    # El equilibrio reduce la brecha de reparto.
+    assert gapb < gap0
+    # Y el makespan (tiempo del que más tarda) baja con el equilibrio.
+    assert resb.makespan_drive_hours < res0.makespan_drive_hours
+    # Cobertura y SOC se mantienen.
+    assert len(_all_visited(resb, inst)) == 20
+    assert _min_soc(resb) >= cfgb.vehicle.min_soc_kwh - 1e-6
 
 
 # --- Matriz de distancias explícita (fuente única de verdad) ---------------

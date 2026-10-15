@@ -10,9 +10,19 @@ de que el estado de carga (SOC) **nunca** baje de un mínimo de seguridad (nunca
 se queda sin batería).
 
 Soporta una **flota de N vehículos homogéneos**: todos parten de la base, se
-reparten las visitas (cada visita la atiende un solo vehículo) y el objetivo es
-minimizar la **energía total** de la flota. Por defecto cada vehículo debe
-atender al menos una visita.
+reparten las visitas (cada visita la atiende un solo vehículo). Por defecto cada
+vehículo debe atender al menos una visita.
+
+**Equilibrio de carga entre vehículos (makespan).** Minimizar solo la energía
+total lleva a un reparto muy desigual (un vehículo hace casi todas las visitas,
+porque repartir añade viajes de ida/vuelta a la base). Para equilibrar la carga
+se añade un término de **makespan**: se penaliza el tiempo de conducción del
+vehículo que más tarda, lo que empuja a repartir parejo. El peso
+`makespan_weight` (por defecto 0.5) gradúa el equilibrio: con 0 se recupera el
+objetivo de solo energía; valores 0.5–5 equilibran las rutas con un costo mínimo
+de energía extra. Ejemplo (evaluation, 2 vehículos): peso 0 reparte 1/19
+visitas (makespan 110 min); peso 0.5 reparte 9/11 (makespan 64 min) por solo
++1.2 kWh.
 
 ## Enfoque
 
@@ -116,6 +126,7 @@ Opciones principales:
 |-----------------|---------------------------------------------------------|
 | `--instance`    | `evaluation`, `competition` o `all`                     |
 | `--vehicles`    | Número de vehículos de la flota (por defecto 1)         |
+| `--makespan-weight` | Peso del equilibrio de carga; 0 = solo energía (por defecto 0.5) |
 | `--time-limit`  | Límite de cómputo de OR-Tools en segundos               |
 | `--battery`     | Capacidad de batería en kWh (sobreescribe la estimada)  |
 | `--min-soc`     | SOC mínimo como fracción (0–1), por defecto 0.10        |

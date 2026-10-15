@@ -13,9 +13,19 @@ Flota
 * ``fleet_size`` vehículos **homogéneos** (misma batería, consumo y conector).
 * Todas las rutas parten y terminan en la base.
 * Objetivo global: minimizar la **energía de conducción total** (suma de todas
-  las rutas).
+  las rutas), más (opcional) un término de **makespan** que equilibra la carga.
 * Si ``require_all_vehicles_used`` es True, cada vehículo debe hacer al menos
   una visita (no se permiten rutas vacías base->base).
+
+Equilibrio de carga (makespan)
+------------------------------
+Con el objetivo de solo energía, el reparto óptimo es desigual (un vehículo hace
+casi todas las visitas, porque repartir añade viajes de ida/vuelta a la base).
+Para equilibrar se añade una dimensión de **tiempo de conducción** (distancia /
+``avg_speed_kmh``) y se penaliza su *span* global con
+``SetGlobalSpanCostCoefficient``: eso minimiza el tiempo del vehículo que más
+tarda (el makespan), empujando a que ningún vehículo quede sobrecargado. El peso
+``makespan_weight`` gradúa el equilibrio (0 = solo energía).
 
 Modelado de la batería (dimensión de SOC restante, por vehículo)
 ----------------------------------------------------------------
@@ -68,6 +78,7 @@ class VehicleRoute:
     chargers_used: list[str]       # cargadores visitados por este vehículo
     soc_at_nodes_kwh: list[float]  # SOC al llegar a cada nodo de la ruta
     n_visits: int                  # nº de visitas atendidas por este vehículo
+    drive_time_hours: float = 0.0  # tiempo de conducción (sin recargas)
 
 
 @dataclass
@@ -78,6 +89,8 @@ class FleetResult:
     total_drive_energy_kwh: float = float("inf")
     feasible: bool = False
     status: str = "NO_SOLUTION"
+    # Makespan de conducción: tiempo del vehículo que más tarda conduciendo (h).
+    makespan_drive_hours: float = 0.0
 
     @property
     def all_chargers_used(self) -> list[str]:
@@ -165,6 +178,10 @@ def solve_evrp(
     sub_energy = full_energy[np.ix_(global_idx, global_idx)]
     sub_energy_scaled = energy_matrix_scaled(sub_energy, scale)
 
+    # Submatriz de distancias (km) para derivar tiempos de conducción.
+    full_dist_arr = np.asarray(full_dist, dtype=float)
+    sub_dist_km = full_dist_arr[np.ix_(global_idx, global_idx)]
+
     # Enteros escalados de SOC.
     capacity_scaled = int(round(veh.initial_soc_kwh * scale))
     min_soc_scaled = int(round(veh.min_soc_kwh * scale))
@@ -250,6 +267,48 @@ def solve_evrp(
             end_index = routing.End(v)
             visit_dim.CumulVar(end_index).SetMin(1)
 
+    # --- Dimensión de tiempo de conducción + makespan -----------------------
+    # El tiempo de un arco = distancia / velocidad media. Se modela una
+    # dimensión "time" (en segundos enteros). El makespan (tiempo del vehículo
+    # que más tarda) se penaliza con SetGlobalSpanCostCoefficient sobre esa
+    # dimensión: eso empuja a equilibrar la carga entre vehículos.
+    #
+    # El coeficiente convierte "segundos de span" a las unidades del objetivo
+    # (energía escalada). A makespan_weight = 1, un segundo de span pesa como la
+    # energía de conducir un segundo a la velocidad media; así el peso es una
+    # perilla relativa adimensional e independiente del factor de escala.
+    avg_speed_kmh = max(1e-6, float(cfg.solver.avg_speed_kmh))
+    makespan_weight = float(cfg.solver.makespan_weight)
+
+    def time_transit_cb(from_index: int, to_index: int) -> int:
+        i = manager.IndexToNode(from_index)
+        j = manager.IndexToNode(to_index)
+        km = float(sub_dist_km[i][j])
+        seconds = km / avg_speed_kmh * 3600.0
+        return int(round(seconds))
+
+    time_cb_idx = routing.RegisterTransitCallback(time_transit_cb)
+    # Horizonte amplio: suma de todos los arcos de la red como cota superior.
+    max_seconds = int(round(float(sub_dist_km.sum()) / avg_speed_kmh * 3600.0)) + 1
+    routing.AddDimension(
+        time_cb_idx,
+        0,            # sin espera/slack en los nodos
+        max_seconds,  # cota superior del tiempo acumulado por vehículo
+        True,         # tiempo inicial = 0 en la base
+        "time",
+    )
+    time_dim = routing.GetDimensionOrDie("time")
+
+    if makespan_weight > 0 and fleet_size > 1:
+        # Energía (escalada) por segundo de conducción a la velocidad media:
+        #   kWh/km * (km/s) = kWh/s ; * scale = micro-kWh/s.
+        kwh_per_km = max(1e-9, model.kwh_per_km)
+        km_per_s = avg_speed_kmh / 3600.0
+        energy_per_second_scaled = kwh_per_km * km_per_s * scale
+        coef = int(round(makespan_weight * energy_per_second_scaled))
+        coef = max(1, coef)
+        time_dim.SetGlobalSpanCostCoefficient(coef)
+
     # --- Búsqueda -----------------------------------------------------------
     search = pywrapcp.DefaultRoutingSearchParameters()
     search.first_solution_strategy = _enum_first_solution(
@@ -269,6 +328,7 @@ def solve_evrp(
     # --- Extraer una ruta por vehículo --------------------------------------
     routes: list[VehicleRoute] = []
     total_energy_scaled = 0
+    makespan_seconds = 0
     for v in range(fleet_size):
         route_nodes: list[int] = []
         soc_values: list[float] = []
@@ -292,6 +352,10 @@ def solve_evrp(
         n_visits = sum(1 for k in route_nodes if k in visit_idxs)
         total_energy_scaled += route_energy_scaled
 
+        # Tiempo de conducción de la ruta = cumul final de la dimensión "time".
+        route_seconds = solution.Value(time_dim.CumulVar(routing.End(v)))
+        makespan_seconds = max(makespan_seconds, route_seconds)
+
         routes.append(
             VehicleRoute(
                 vehicle_id=v,
@@ -301,6 +365,7 @@ def solve_evrp(
                 chargers_used=chargers_used,
                 soc_at_nodes_kwh=soc_values,
                 n_visits=n_visits,
+                drive_time_hours=route_seconds / 3600.0,
             )
         )
 
@@ -321,4 +386,5 @@ def solve_evrp(
         total_drive_energy_kwh=total_energy_scaled / scale,
         feasible=all_covered,
         status=status,
+        makespan_drive_hours=makespan_seconds / 3600.0,
     )
